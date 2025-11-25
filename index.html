@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enciclopédia Singular</title>
+    <!-- Importações Firebase Firestore e Auth -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Variáveis globais do Canvas (MANDATÓRIAS)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfigRaw = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
+        const firebaseConfig = JSON.parse(firebaseConfigRaw);
+
+        // Estado Global
+        let db, auth;
+        let userId = 'loading...';
+        let currentCategory = 'Todos'; // Estado de filtro de categoria
+
+        const isValidFirebaseConfig = firebaseConfig && firebaseConfig.projectId;
+
+        // --- MOCK DATA COM LINKS DO YOUTUBE E NOVAS MARCAS ---
+        const MOCK_DATA = [
+            // Cientistas e Inventores
+            { id: '1', name: 'Alan Turing', description: 'Matemático, lógico e cientista da computação. Considerado o pai da ciência da computação e da inteligência artificial.', initials: 'AT', wikiUrl: 'https://pt.wikipedia.org/wiki/Alan_Turing', category: 'Cientistas e Inventores' },
+            { id: '2', name: 'Daniel Kahneman', description: 'Psicólogo e economista ganhador do Prêmio Nobel. Famoso por seu trabalho sobre o julgamento e tomada de decisão.', initials: 'DK', wikiUrl: 'https://pt.wikipedia.org/wiki/Daniel_Kahneman', category: 'Cientistas e Inventores', youtubeUrl: 'https://www.youtube.com/watch?v=eYKiNrIZeCo' },
+            { id: '3', name: 'Nikola Tesla', description: 'Engenheiro e inventor, conhecido por suas contribuições ao design do moderno sistema de eletricidade de corrente alternada (CA).', initials: 'NT', wikiUrl: 'https://pt.wikipedia.org/wiki/Nikola_Tesla', category: 'Cientistas e Inventores' },
+            { id: '5', name: 'Albert Einstein', description: 'Físico teórico, amplamente reconhecido como um dos mais influentes cientistas de todos os tempos. Desenvolveu a teoria da relatividade.', initials: 'AE', wikiUrl: 'https://pt.wikipedia.org/wiki/Albert_Einstein', category: 'Cientistas e Inventores' },
+            { id: '16', name: 'Marie Curie', description: 'Cientista polonesa e naturalizada francesa. Pioneira no campo da radioatividade, foi a primeira mulher a ganhar um Prêmio Nobel.', initials: 'MC', wikiUrl: 'https://pt.wikipedia.org/wiki/Marie_Curie', category: 'Cientistas e Inventores' },
+            { id: '17', name: 'Charles Darwin', description: 'Naturalista britânico, famoso por desenvolver a teoria da evolução por seleção natural, fundamental para a biologia moderna.', initials: 'CD', wikiUrl: 'https://pt.wikipedia.org/wiki/Charles_Darwin', category: 'Cientistas e Inventores' },
+            { id: '29', name: 'Sam Altman', description: 'Empresário e investidor americano. Mais conhecido como CEO da OpenAI, empresa por trás do ChatGPT, e um ícone da Inteligência Artificial.', initials: 'SA', wikiUrl: 'https://pt.wikipedia.org/wiki/Sam_Altman', category: 'Cientistas e Inventores' },
+            { id: '30', name: 'Brendan Eich', description: 'Programador e empresário americano. Criador da linguagem de programação JavaScript e cofundador do projeto Mozilla e do Brave browser.', initials: 'BE', wikiUrl: 'https://pt.wikipedia.org/wiki/Brendan_Eich', category: 'Cientistas e Inventores' },
+            { id: '31', name: 'Guido van Rossum', description: 'Programador de computadores holandês. Mais conhecido como o criador da linguagem de programação Python.', initials: 'GVR', wikiUrl: 'https://pt.wikipedia.org/wiki/Guido_van_Rossum', category: 'Cientistas e Inventores' },
+            { id: '32', name: 'Thomas Edison', description: 'Inventor e empresário americano. Desenvolveu muitos dispositivos importantes, como a lâmpada incandescente e o fonógrafo.', initials: 'TE', wikiUrl: 'https://pt.wikipedia.org/wiki/Thomas_Edison', category: 'Cientistas e Inventores' },
+            { id: '33', name: 'Satoshi Nakamoto', description: 'Pseudônimo da pessoa ou grupo que desenvolveu a Bitcoin, a primeira criptomoeda. Sua verdadeira identidade permanece desconhecida.', initials: 'SN', wikiUrl: 'https://pt.wikipedia.org/wiki/Satoshi_Nakamoto', category: 'Cientistas e Inventores' },
+            { id: '40', name: 'Isaac Newton', description: 'Físico, matemático e astrônomo inglês. Suas leis do movimento e da gravitação universal formaram a base da mecânica clássica.', initials: 'IN', wikiUrl: 'https://pt.wikipedia.org/wiki/Isaac_Newton', category: 'Cientistas e Inventores' },
+            { id: '41', name: 'Galileu Galilei', description: 'Astrônomo, físico e engenheiro italiano. Considerado o pai da ciência moderna por seu trabalho com o telescópio e apoio ao heliocentrismo.', initials: 'GG', wikiUrl: 'https://pt.wikipedia.org/wiki/Galileu_Galilei', category: 'Cientistas e Inventores' },
+            { id: '42', name: 'Nicolau Copérnico', description: 'Astrônomo e matemático polonês. Propôs o modelo heliocêntrico do Sistema Solar, colocando o Sol, e não a Terra, no centro.', initials: 'NC', wikiUrl: 'https://pt.wikipedia.org/wiki/Nicolau_Copérnico', category: 'Cientistas e Inventores' },
+            { id: '43', name: 'Stephen Hawking', description: 'Físico teórico e cosmólogo inglês. Notável por seu trabalho em buracos negros e relatividade, popularizando a ciência.', initials: 'SH', wikiUrl: 'https://pt.wikipedia.org/wiki/Stephen_Hawking', category: 'Cientistas e Inventores' },
+            { id: '44', name: 'Rosalind Franklin', description: 'Biofísica e cristalógrafa britânica. Contribuição crucial para a compreensão das estruturas moleculares do DNA, RNA, vírus e grafite.', initials: 'RF', wikiUrl: 'https://pt.wikipedia.org/wiki/Rosalind_Franklin', category: 'Cientistas e Inventores' },
+
+            // Esporte
+            { id: '4', name: 'Pelé', description: 'Futebolista brasileiro, considerado por muitos o maior jogador de futebol de todos os tempos. O Rei do Futebol.', initials: 'P', wikiUrl: 'https://pt.wikipedia.org/wiki/Pel%C3%A9', category: 'Esporte' },
+            { id: '6', name: 'Michael Jordan', description: 'Ex-jogador de basquete americano, amplamente considerado o maior de todos os tempos. Liderou o Chicago Bulls a seis títulos da NBA.', initials: 'MJ', wikiUrl: 'https://www.youtube.com/watch?v=vNCYrIAXcEA&t=2s', category: 'Esporte', youtubeUrl: 'https://www.youtube.com/watch?v=vNCYrIAXcEA&t=2s' },
+            { id: '18', name: 'Lionel Messi', description: 'Futebolista argentino, amplamente considerado um dos maiores de todos os tempos. Vencedor de múltiplos prêmios Bola de Ouro.', initials: 'LM', wikiUrl: 'https://pt.wikipedia.org/wiki/Lionel_Messi', category: 'Esporte' },
+            { id: '19', name: 'Cristiano Ronaldo', description: 'Futebolista português, um dos jogadores mais condecorados e midiáticos da história. Conhecido por sua longevidade e poder de gols.', initials: 'CR7', wikiUrl: 'https://pt.wikipedia.org/wiki/Cristiano_Ronaldo', category: 'Esporte' },
+            { id: '20', name: 'Ronaldinho Gaúcho', description: 'Ex-futebolista brasileiro, notório por seu talento mágico e estilo de jogo alegre. Vencedor da Copa do Mundo e Bola de Ouro.', initials: 'R10', wikiUrl: 'https://pt.wikipedia.org/wiki/Ronaldinho_Ga%C3%BAcho', category: 'Esporte' },
+            { id: '21', name: 'Ronaldo Fenômeno', description: 'Ex-futebolista brasileiro, um dos maiores atacantes da história. Duas vezes campeão da Copa do Mundo e tricampeão do prêmio Melhor do Mundo pela FIFA.', initials: 'R9', wikiUrl: 'https://pt.wikipedia.org/wiki/Ronaldo_Naz%C3%A1rio', category: 'Esporte' },
+            { id: '24', name: 'Kobe Bryant', description: 'Ex-jogador de basquete americano, lenda do Los Angeles Lakers. Conhecido por sua ética de trabalho e cinco títulos da NBA.', initials: 'KB', wikiUrl: 'https://pt.wikipedia.org/wiki/Kobe_Bryant', category: 'Esporte' },
+            { id: '34', name: 'Neymar Júnior', description: 'Futebolista brasileiro, conhecido por sua habilidade, dribles e por ser um dos maiores artilheiros da história da Seleção Brasileira.', initials: 'NJR', wikiUrl: 'https://pt.wikipedia.org/wiki/Neymar', category: 'Esporte', youtubeUrl: 'https://www.youtube.com/watch?v=3j7WPdVZSZo&t=7s' },
+
+            // Tech & Empreendedores
+            { id: '7', name: 'Enzo Ferrari', description: 'Automobilista e empresário italiano, fundador da Scuderia Ferrari e da fabricante de automóveis Ferrari.', initials: 'EF', wikiUrl: 'https://pt.wikipedia.org/wiki/Enzo_Ferrari', category: 'Tech & Empreendedores', youtubeUrl: 'https://www.youtube.com/watch?v=WYjCWl66o40&t=118s&pp=0gcJCRUKAYcqIYzv' },
+            { id: '10', name: 'Henry Ford', description: 'Empresário americano e fundador da Ford Motor Company. Revolucionou a produção industrial com a linha de montagem e o fordismo.', initials: 'HF', wikiUrl: 'https://pt.wikipedia.org/wiki/Henry_Ford', category: 'Tech & Empreendedores' },
+            { id: '11', name: 'Elon Musk', description: 'Empresário e inventor. CEO da SpaceX e Tesla. Visionário em tecnologias como veículos elétricos, exploração espacial e inteligência artificial.', initials: 'EM', wikiUrl: 'https://pt.wikipedia.org/wiki/Elon_Musk', category: 'Tech & Empreendedores', youtubeUrl: 'https://www.youtube.com/watch?v=iR4V9p9RVRs' },
+            { id: '12', name: 'Jeff Bezos', description: 'Empresário americano, fundador, presidente executivo e ex-CEO da Amazon. Uma das pessoas mais ricas do mundo e pioneiro do e-commerce.', initials: 'JB', wikiUrl: 'https://pt.wikipedia.org/wiki/Jeff_Bezos', category: 'Tech & Empreendedores' },
+            { id: '13', name: 'Mark Zuckerberg', description: 'Cofundador e CEO da Meta Platforms (anteriormente Facebook, Inc.). Criador da rede social que revolucionou a comunicação digital.', initials: 'MZ', wikiUrl: 'https://pt.wikipedia.org/wiki/Mark_Zuckerberg', category: 'Tech & Empreendedores' },
+            { id: '14', name: 'Steve Jobs', description: 'Cofundador, presidente e CEO da Apple Inc. Uma figura icônica na revolução da computação pessoal e mobilidade.', initials: 'SJ', wikiUrl: 'https://pt.wikipedia.org/wiki/Steve_Jobs', category: 'Tech & Empreendedores' },
+            { id: '15', name: 'Bill Gates', description: 'Cofundador da Microsoft, que se tornou a maior empresa de software para computador pessoal do mundo. Filantropo e empresário.', initials: 'BG', wikiUrl: 'https://pt.wikipedia.org/wiki/Bill_Gates', category: 'Tech & Empreendedores' },
+            { id: '27', name: 'Mario Araripe', description: 'Empresário brasileiro, fundador e presidente da Casa dos Ventos, uma das maiores desenvolvedoras de projetos eólicos do Brasil.', initials: 'MA', wikiUrl: 'https://pt.wikipedia.org/wiki/Mario_Araripe', category: 'Tech & Empreendedores' },
+            { id: '28', name: 'Luciano Hang (Havan)', description: 'Empresário brasileiro, cofundador e proprietário da Havan, uma das maiores redes de lojas de departamento do Brasil.', initials: 'LH', wikiUrl: 'https://pt.wikipedia.org/wiki/Luciano_Hang', category: 'Tech & Empreendedores' },
+            { id: '51', name: 'Ferruccio Lamborghini', description: 'Empresário italiano, fundador da famosa marca de carros esportivos Lamborghini, rivalizando com Enzo Ferrari.', initials: 'FL', wikiUrl: 'https://pt.wikipedia.org/wiki/Ferruccio_Lamborghini', category: 'Tech & Empreendedores', youtubeUrl: 'https://www.youtube.com/watch?v=cgQAVDy8sK0' },
+            
+            // Arte e Cultura
+            { id: '45', name: 'Leonardo da Vinci', description: 'Polímata renascentista, notável pintor, escultor, arquiteto, músico, cientista, matemático e inventor. Criador da Monalisa.', initials: 'LDV', wikiUrl: 'https://pt.wikipedia.org/wiki/Leonardo_da_Vinci', category: 'Arte e Cultura' },
+            { id: '46', name: 'William Shakespeare', description: 'Poeta, dramaturgo e ator inglês. Amplamente considerado o maior escritor da língua inglesa e o dramaturgo mais importante do mundo.', initials: 'WS', wikiUrl: 'https://pt.wikipedia.org/wiki/William_Shakespeare', category: 'Arte e Cultura' },
+            
+            // Liderança e Realeza
+            { id: '47', name: 'Martin Luther King Jr.', description: 'Pastor batista e ativista político americano. Foi um dos mais importantes líderes do movimento dos direitos civis nos Estados Unidos.', initials: 'MLK', wikiUrl: 'https://pt.wikipedia.org/wiki/Martin_Luther_King_Jr.', category: 'Liderança e Realeza' },
+            { id: '48', name: 'Princesa Diana', description: 'Membro da família real britânica e ativista humanitária. Conhecida por seu trabalho de caridade e impacto na cultura global.', initials: 'PD', wikiUrl: 'https://pt.wikipedia.org/wiki/Diana,_Princesa_de_Gales', category: 'Liderança e Realeza' },
+            { id: '49', name: 'Elizabeth II', description: 'Rainha do Reino Unido e dos outros reinos da Commonwealth de 1952 até sua morte em 2022. Monarca britânica com o reinado mais longo.', initials: 'EII', wikiUrl: 'https://pt.wikipedia.org/wiki/Isabel_II_do_Reino_Unido', category: 'Liderança e Realeza' },
+
+            // Política
+            { id: '35', name: 'Donald Trump', description: 'Empresário, personalidade televisiva e político americano. Serviu como o 45º e 47º Presidente dos Estados Unidos.', initials: 'DT', wikiUrl: 'https://pt.wikipedia.org/wiki/Donald_Trump', category: 'Política' },
+
+
+            // Organizações (Marcas de Carro e Tecnologia)
+            { id: '8', name: 'Ferrari S.p.A.', description: 'Fabricante italiana de carros esportivos de luxo, sinônimo de velocidade, design e Fórmula 1. Fundada em 1947.', initials: 'FER', wikiUrl: 'https://pt.wikipedia.org/wiki/Ferrari', category: 'Organizações' },
+            { id: '9', name: 'S.C. Corinthians Paulista', description: 'Um dos maiores clubes de futebol do Brasil e do mundo. Notório pela sua torcida apaixonada e história centenária de glórias.', initials: 'SCCP', wikiUrl: 'https://pt.wikipedia.org/wiki/Sport_Club_Corinthians_Paulista', category: 'Organizações', youtubeUrl: 'https://www.youtube.com/watch?v=_U0qWL18gVA&t=2s' },
+            { id: '22', name: 'Real Madrid C.F.', description: 'Clube de futebol espanhol, considerado o mais vitorioso da história, especialmente na Liga dos Campeões da UEFA.', initials: 'RM', wikiUrl: 'https://pt.wikipedia.org/wiki/Real_Madrid_Club_de_Futebol', category: 'Organizações' },
+            { id: '23', name: 'F.C. Barcelona', description: 'Clube de futebol espanhol e um dos mais poderosos e populares do mundo, conhecido pela filosofia de jogo "tiki-taka".', initials: 'FCB', wikiUrl: 'https://pt.wikipedia.org/wiki/F.C._Barcelona', category: 'Organizações' },
+            { id: '25', name: 'BMW', description: 'Fabricante alemã de automóveis, motocicletas e motores. Sinônimo de luxo, desempenho e engenharia de precisão.', initials: 'BMW', wikiUrl: 'https://pt.wikipedia.org/wiki/BMW', category: 'Organizações' },
+            { id: '26', name: 'Porsche', description: 'Fabricante alemã de carros esportivos de alta performance, SUVs e sedãs, famosa pelo icônico modelo 911.', initials: 'PORS', wikiUrl: 'https://pt.wikipedia.org/wiki/Porsche', category: 'Organizações' },
+            { id: '36', name: 'Nike', description: 'Gigante multinacional americana de calçados, vestuário e equipamentos esportivos. Uma das marcas mais valiosas do mundo.', initials: 'NIKE', wikiUrl: 'https://pt.wikipedia.org/wiki/Nike', category: 'Organizações' },
+            { id: '37', name: 'Adidas', description: 'Empresa alemã de artigos esportivos. Uma das maiores fabricantes de material esportivo no mundo, rival histórica da Nike.', initials: 'ADI', wikiUrl: 'https://pt.wikipedia.org/wiki/Adidas', category: 'Organizações' },
+            { id: '38', name: 'Apple', description: 'Empresa de tecnologia multinacional americana. Conhecida por produtos icônicos como iPhone, Mac e por revolucionar a tecnologia pessoal.', initials: 'APL', wikiUrl: 'https://pt.wikipedia.org/wiki/Apple', category: 'Organizações' },
+            { id: '39', name: 'Samsung', description: 'Conglomerado multinacional sul-coreano. Líder global em eletrônicos, incluindo smartphones, televisores e semicondutores.', initials: 'SAMS', wikiUrl: 'https://pt.wikipedia.org/wiki/Samsung', category: 'Organizações' },
+            { id: '50', name: 'Mercedes-Benz', description: 'Fabricante alemã de automóveis de luxo e veículos comerciais. Uma das marcas de carro mais reconhecidas e antigas do mundo.', initials: 'MB', wikiUrl: 'https://pt.wikipedia.org/wiki/Mercedes-Benz', category: 'Organizações' },
+            
+            // Marcas de Carro Japonesas e Outras
+            { id: '52', name: 'Toyota', description: 'Fabricante multinacional japonesa de automóveis. Mundialmente conhecida por ser pioneira na produção enxuta e veículos híbridos.', initials: 'TYT', wikiUrl: 'https://pt.wikipedia.org/wiki/Toyota', category: 'Organizações' },
+            { id: '53', name: 'Mitsubishi', description: 'Conglomerado japonês diversificado, famoso pela sua divisão automotiva e histórica atuação em setores pesados e de tecnologia.', initials: 'MTS', wikiUrl: 'https://pt.wikipedia.org/wiki/Mitsubishi', category: 'Organizações' },
+            { id: '54', name: 'Honda', description: 'Fabricante multinacional japonesa de automóveis, motocicletas e equipamentos de força. Líder mundial em produção de motocicletas.', initials: 'HND', wikiUrl: 'https://pt.wikipedia.org/wiki/Honda', category: 'Organizações' },
+            { id: '55', name: 'Nissan', description: 'Fabricante multinacional japonesa de automóveis. Conhecida por sua inovação em veículos elétricos e esportivos como o GT-R.', initials: 'NSN', wikiUrl: 'https://pt.wikipedia.org/wiki/Nissan', category: 'Organizações' },
+            { id: '56', name: 'Fiat', description: 'Fabricante italiana de automóveis, parte do grupo Stellantis. Notória por seus carros compactos e de design italiano.', initials: 'FIT', wikiUrl: 'https://pt.wikipedia.org/wiki/Fiat', category: 'Organizações' },
+            { id: '57', name: 'Chevrolet', description: 'Marca de automóveis americana da General Motors (GM). Uma das maiores e mais reconhecidas marcas de carros do mundo.', initials: 'CHV', wikiUrl: 'https://pt.wikipedia.org/wiki/Chevrolet', category: 'Organizações' },
+            { id: '58', name: 'Sony', description: 'Gigante multinacional japonesa de tecnologia e entretenimento. Líder em eletrônicos, jogos (PlayStation) e produção de mídia.', initials: 'SNY', wikiUrl: 'https://pt.wikipedia.org/wiki/Sony', category: 'Organizações' },
+            
+            // NOVAS ADIÇÕES (Google, Microsoft, NVIDIA, Audi, Volkswagen, Coca-Cola)
+            { id: '59', name: 'Google (Alphabet)', description: 'O principal motor de busca do mundo e líder em Inteligência Artificial, organizando a informação global.', initials: 'GGL', wikiUrl: 'https://pt.wikipedia.org/wiki/Google', category: 'Organizações' },
+            { id: '60', name: 'Microsoft', description: 'Gigante de software (Windows, Office) e infraestrutura de nuvem (Azure), fundamental para a produtividade global.', initials: 'MSFT', wikiUrl: 'https://pt.wikipedia.org/wiki/Microsoft', category: 'Organizações' },
+            { id: '61', name: 'NVIDIA', description: 'Líder mundial em GPUs, hardware essencial para jogos e o motor principal do boom do Deep Learning e da IA.', initials: 'NVD', wikiUrl: 'https://pt.wikipedia.org/wiki/Nvidia', category: 'Organizações' },
+            { id: '62', name: 'Audi', description: 'Fabricante alemã de carros de luxo, pioneira em tração integral (Quattro) e design automotivo premium.', initials: 'AUDI', wikiUrl: 'https://pt.wikipedia.org/wiki/Audi', category: 'Organizações' },
+            { id: '63', name: 'Volkswagen', description: 'O "carro do povo" (Fusca/Beetle) e um dos maiores grupos automotivos do mundo (inclui Audi, Porsche, etc.).', initials: 'VW', wikiUrl: 'https://pt.wikipedia.org/wiki/Volkswagen', category: 'Organizações' },
+            { id: '64', name: 'Coca-Cola', description: 'A marca de bebida mais reconhecida globalmente e um ícone cultural inigualável de consumo em massa.', initials: 'COLA', wikiUrl: 'https://pt.wikipedia.org/wiki/Coca-Cola', category: 'Organizações' },
+        ];
+
+        // As categorias disponíveis para a barra lateral
+        const CATEGORIES = ['Todos', 'Esporte', 'Cientistas e Inventores', 'Tech & Empreendedores', 'Organizações', 'Política', 'Arte e Cultura', 'Liderança e Realeza'];
+
+
+        // --- FUNÇÕES DE CONTROLE DE ESTADO E RENDERIZAÇÃO ---
+        let loadedData = MOCK_DATA; // Armazena os dados carregados (Firestore ou Mock)
+        
+        // Função para calcular a contagem de itens por categoria
+        const calculateCategoryCounts = (data) => {
+            const counts = data.reduce((acc, item) => {
+                const category = item.category || 'Outros';
+                acc[category] = (acc[category] || 0) + 1;
+                return acc;
+            }, {});
+            counts['Todos'] = data.length;
+            return counts;
+        };
+
+        // Função para atualizar visualmente os botões da barra lateral
+        const updateSidebarButtons = (counts) => {
+            document.querySelectorAll('#sidebar button').forEach(button => {
+                const cat = button.getAttribute('data-category');
+                const count = counts[cat] || 0;
+                
+                // 1. Atualiza o texto do botão com a contagem
+                button.textContent = `${cat} (${count})`;
+                
+                // 2. Atualiza a classe ativa
+                if (cat === currentCategory) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        };
+        
+        // Função auxiliar para selecionar um subconjunto aleatório (usa Fisher-Yates para garantir aleatoriedade)
+        const getRandomSubset = (arr, size) => {
+            const shuffled = [...arr];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                // Evita colocar elementos que já estão na lista
+                if (shuffled.length > size && arr.length > size && arr.indexOf(shuffled[i]) !== -1 && shuffled.indexOf(arr[i]) === -1) {
+                    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; // Tenta trocar de novo se o elemento trocado estava na lista original
+                }
+            }
+            return shuffled.slice(0, size);
+        };
+        
+        // --- FUNÇÕES DE TOOLTIP/POPUP PARA DESTAQUES ---
+        window.outOfBoundsTimeout;
+        window.showTooltip = (event, description, title) => {
+            clearTimeout(window.outOfBoundsTimeout);
+            const tooltip = document.getElementById('feature-tooltip-popup');
+            if (!tooltip) return;
+
+            // 1. Atualiza o conteúdo
+            tooltip.innerHTML = `<div class="tooltip-title">${title}</div><p>${description}</p>`;
+
+            // 2. Posiciona
+            const cardRect = event.currentTarget.getBoundingClientRect();
+            
+            // Tenta posicionar no centro acima do card
+            let top = cardRect.top + window.scrollY - 10; // 10px acima do card
+            let left = cardRect.left + cardRect.width / 2;
+            
+            tooltip.style.opacity = '0'; // Garante que está escondido enquanto reposiciona
+            tooltip.style.display = 'block';
+
+            // Força o recalculate de dimensões para posicionar corretamente
+            const tooltipWidth = tooltip.offsetWidth;
+            const tooltipHeight = tooltip.offsetHeight;
+
+            // Posicionamento horizontal (centralizado no card)
+            let finalLeft = left - tooltipWidth / 2;
+            
+            // Checagem de limites (Horizontal)
+            if (finalLeft < 10) {
+                finalLeft = 10;
+            } else if (finalLeft + tooltipWidth > window.innerWidth - 10) {
+                finalLeft = window.innerWidth - tooltipWidth - 10;
+            }
+            
+            // Posicionamento vertical (acima ou abaixo)
+            let finalTop = top - tooltipHeight;
+            
+            // Checagem de limites (Vertical - se não cabe acima, coloca abaixo)
+            if (finalTop < 10) {
+                finalTop = cardRect.bottom + window.scrollY + 10;
+                // Adicional: em mobile, força o posicionamento fixo/responsivo
+                if (window.innerWidth < 600) {
+                    finalTop = 90; // Abaixo do cabeçalho fixo
+                }
+            }
+            
+            tooltip.style.left = `${finalLeft}px`;
+            tooltip.style.top = `${finalTop}px`;
+            
+            // 3. Mostra o elemento
+            setTimeout(() => {
+                tooltip.style.opacity = '1';
+                // Remove o transform para o pop-up, já que ele é gerenciado pela posição
+                tooltip.style.transform = 'translateY(0)';
+            }, 50); // Pequeno delay para transição
+        };
+
+        window.hideTooltip = () => {
+            const tooltip = document.getElementById('feature-tooltip-popup');
+            if (!tooltip) return;
+            
+            // Usa um pequeno timeout para lidar com movimentos rápidos e evitar flickering
+            window.outOfBoundsTimeout = setTimeout(() => {
+                tooltip.style.opacity = '0';
+                tooltip.style.transform = 'translateY(10px)';
+                // Usa um timeout maior para ocultar totalmente APÓS a transição
+                setTimeout(() => {
+                    if (tooltip.style.opacity === '0') {
+                        tooltip.style.display = 'none';
+                    }
+                }, 300); 
+            }, 50); 
+        };
+        
+        // Função para renderizar os itens em destaque (principais)
+        window.renderFeaturedItems = (data) => {
+            const container = document.getElementById('featured-items-container');
+            if (!container) return;
+            
+            container.innerHTML = ''; // Limpa a seção anterior
+
+            if (data.length < 3) {
+                container.innerHTML = `<p style="color: rgba(255, 255, 255, 0.4); text-align: center; width: 100%;">Adicione mais itens para ter Destaques.</p>`;
+                return;
+            }
+            
+            const featured = getRandomSubset(data, 3);
+            
+            featured.forEach(item => {
+                // Prepara a descrição para ser passada no JS (escapando aspas)
+                const safeDescription = item.description.replace(/'/g, "\\'").replace(/"/g, '`'); 
+                
+                const itemHtml = `
+                    <div class="featured-card" 
+                         onmouseover="showTooltip(event, '${safeDescription}', '${item.name}')" 
+                         onmouseout="hideTooltip()">
+                        <div class="featured-initials">${item.initials || '??'}</div>
+                        <div class="featured-info">
+                            <h4 title="${item.name}">${item.name}</h4>
+                            <span class="featured-category">${item.category}</span>
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += itemHtml;
+            });
+        };
+
+
+        // Função principal de filtragem e renderização (combina busca e categoria)
+        window.updateView = (data = loadedData) => {
+            const grid = document.getElementById('singularities-grid');
+            const searchInput = document.getElementById('search-input');
+            if (!grid || !searchInput) return;
+
+            const searchTerm = searchInput.value.toLowerCase().trim();
+            
+            // 1. Calculo e Atualização da Contagem da Sidebar
+            const counts = calculateCategoryCounts(data);
+            updateSidebarButtons(counts);
+            
+            // 2. Filtragem de Categoria
+            let filteredData = data;
+            if (currentCategory !== 'Todos') {
+                filteredData = data.filter(item => item.category === currentCategory);
+            }
+
+            // 3. Filtragem de Busca (sobre a categoria filtrada)
+            if (searchTerm.length > 0) {
+                 filteredData = filteredData.filter(item => {
+                    const name = item.name.toLowerCase();
+                    const description = item.description.toLowerCase();
+                    const category = item.category.toLowerCase();
+                    return name.includes(searchTerm) || description.includes(searchTerm) || category.includes(searchTerm);
+                });
+            }
+
+            // 4. Renderização
+            window.renderCards(filteredData);
+            
+            // 5. Mensagem de Não Encontrado
+            let message = document.getElementById('no-results-message');
+            if (filteredData.length === 0) {
+                if (!message) {
+                    message = document.createElement('p');
+                    message.id = 'no-results-message';
+                    message.style.cssText = 'grid-column: 1 / -1; color: rgba(255, 255, 255, 0.6); margin-top: 20px; font-size: 1.1rem;';
+                    grid.appendChild(message);
+                }
+                const categoryText = currentCategory === 'Todos' ? '' : ` na categoria "${currentCategory}"`;
+                const searchText = searchTerm.length > 0 ? ` para "${searchTerm}"` : '';
+                message.textContent = `Nenhuma singularidade encontrada${searchText}${categoryText}.`;
+            } else if (message) {
+                message.remove();
+            }
+        };
+
+        // Função chamada ao clicar em 'SINGULARIDADES'
+        window.resetFilter = () => {
+            currentCategory = 'Todos';
+            document.getElementById('search-input').value = '';
+            window.updateView();
+        };
+
+        // Função chamada ao clicar em um botão de categoria
+        window.setCategory = (category) => {
+            currentCategory = category;
+            document.getElementById('search-input').value = ''; // Limpa a busca ao mudar a categoria
+            window.updateView();
+        };
+
+        // Extrai o ID do vídeo do YouTube de várias estruturas de URL para embed
+        const getYoutubeEmbedUrl = (url) => {
+            if (!url) return null;
+            
+            // Regex para extrair o ID de formatos comuns do YouTube
+            const regExp = /^(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+            const match = url.match(regExp);
+            
+            let videoId = null;
+            if (match && match[1]) {
+                videoId = match[1];
+            } else {
+                // Tenta limpar URLs com tempo (e.g., &t=2s)
+                const cleanUrl = url.split('&')[0];
+                const cleanMatch = cleanUrl.match(regExp);
+                if (cleanMatch && cleanMatch[1]) {
+                    videoId = cleanMatch[1];
+                }
+            }
+            
+            // Retorna o formato de embed com autoplay
+            return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : null;
+        };
+
+        // Abre o modal e injeta o vídeo
+        window.openModal = (youtubeUrl) => {
+            const embedUrl = getYoutubeEmbedUrl(youtubeUrl);
+            if (!embedUrl) {
+                console.error("URL do YouTube inválida ou não suportada para embed:", youtubeUrl);
+                // Você pode usar um modal de erro customizado aqui, se quiser.
+                return;
+            }
+            
+            document.getElementById('youtube-iframe').src = embedUrl;
+            document.getElementById('video-modal').style.display = 'block';
+        };
+
+        // Fecha o modal e para o vídeo
+        window.closeModal = () => {
+            document.getElementById('youtube-iframe').src = ''; // Para o vídeo
+            document.getElementById('video-modal').style.display = 'none';
+        };
+        
+        // Função para gerar e renderizar os cards (acessível globalmente)
+        window.renderCards = (data) => {
+            const grid = document.getElementById('singularities-grid');
+            if (!grid) return;
+
+            grid.innerHTML = ''; // Limpa antes de renderizar
+
+            data.forEach(item => {
+                const card = document.createElement('div');
+                card.classList.add('singularidade-card');
+                card.setAttribute('data-id', item.id);
+
+                const initialsText = item.initials || '??';
+
+                // Renderiza o botão do YouTube para abrir o modal
+                const youtubeLinkHtml = item.youtubeUrl ? 
+                    `<button class="youtube-link" onclick="openModal('${item.youtubeUrl}')">Ver Vídeo (Pop-up)</button>` : '';
+
+                card.innerHTML = `
+                    <div class="css-placeholder-container">
+                        ${initialsText} <!-- INJEÇÃO DIRETA DO TEXTO -->
+                    </div>
+                    <div class="card-content">
+                        <h2>${item.name}</h2>
+                        <p>${item.description}</p>
+                        <div class="links-container">
+                            <a href="${item.wikiUrl}" target="_blank" class="wiki-link">Ver na Wikipédia</a>
+                            ${youtubeLinkHtml}
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        };
+
+        // Função para carregar dados (usa Firestore se estiver pronto, ou Mock Data)
+        window.loadSingularities = (mockData = null) => {
+            const grid = document.getElementById('singularities-grid');
+            if (!grid) return; 
+
+            grid.innerHTML = '<p style="text-align: center; color: rgba(255, 255, 255, 0.5); width: 100%;">Carregando Singularidades...</p>';
+
+            if (mockData || !db) {
+                // Modo Fallback (Mock Data)
+                loadedData = MOCK_DATA;
+                window.updateView(loadedData);
+                window.renderFeaturedItems(loadedData); // Renderiza Destaques
+            } else if (db && userId && userId !== 'loading...') {
+                // Modo Firestore (Produção)
+                const singularitiesRef = collection(db, `/artifacts/${appId}/users/${userId}/singularities`);
+                
+                // onSnapshot para atualizações em tempo real
+                onSnapshot(singularitiesRef, (snapshot) => {
+                    const firestoreData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    console.log("Dados do Firestore recebidos:", firestoreData);
+
+                    // Se não houver dados no Firestore, usa os dados mockados
+                    loadedData = firestoreData.length === 0 ? MOCK_DATA : firestoreData;
+                    
+                    window.updateView(loadedData);
+                    window.renderFeaturedItems(loadedData); // Renderiza Destaques
+                }, (error) => {
+                    console.error("Erro ao carregar dados do Firestore, usando MOCK DATA:", error);
+                    loadedData = MOCK_DATA;
+                    window.updateView(loadedData);
+                    window.renderFeaturedItems(loadedData); // Renderiza Destaques
+                });
+            }
+        };
+
+        // Função principal de inicialização
+        const mainInit = async () => {
+            const userIdDisplay = document.getElementById('user-id-display');
+            const sidebar = document.getElementById('sidebar');
+
+            // --- 1. Renderiza os botões iniciais da barra lateral (com contagem do MOCK) ---
+            if(sidebar) {
+                const initialCounts = calculateCategoryCounts(MOCK_DATA);
+                CATEGORIES.forEach(cat => {
+                    const count = initialCounts[cat] || 0;
+                    const button = document.createElement('button');
+                    // Cria o botão com a contagem inicial
+                    button.textContent = `${cat} (${count})`;
+                    button.setAttribute('data-category', cat);
+                    button.onclick = () => window.setCategory(cat);
+                    sidebar.appendChild(button);
+                });
+            }
+
+            if (!isValidFirebaseConfig) {
+                console.error("Configuração do Firebase ausente/inválida. Carregando MOCK DATA para Live Server.");
+                userId = crypto.randomUUID(); 
+                if (userIdDisplay) userIdDisplay.textContent = `ID: ${userId} (MOCK)`;
+                window.loadSingularities(MOCK_DATA); 
+                return; 
+            }
+
+            // --- INICIALIZAÇÃO DO FIREBASE (Apenas no ambiente Canvas) ---
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                setLogLevel('Debug'); 
+
+                const authInstance = getAuth(app);
+                
+                try {
+                    if (typeof __initial_auth_token !== 'undefined') {
+                        await signInWithCustomToken(authInstance, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(authInstance);
+                    }
+                } catch (e) {
+                    console.error("Erro durante a autenticação inicial:", e);
+                }
+
+                // Listener de Estado de Autenticação
+                onAuthStateChanged(authInstance, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        if (userIdDisplay) userIdDisplay.textContent = `ID: ${userId}`;
+                    } else {
+                        userId = crypto.randomUUID(); 
+                        if (userIdDisplay) userIdDisplay.textContent = `ID: ${userId} (ANÔNIMO)`;
+                    }
+                    // Carrega dados APÓS a autenticação resolver
+                    window.loadSingularities();
+                });
+
+            } catch (error) {
+                console.error("Erro FATAL ao inicializar Firebase. Carregando MOCK DATA:", error);
+                userId = crypto.randomUUID(); 
+                if (userIdDisplay) userIdDisplay.textContent = `ID: ${userId} (FALLBACK)`;
+                window.loadSingularities(MOCK_DATA);
+            }
+        };
+
+        // Roda a função principal quando o DOM estiver pronto
+        document.addEventListener('DOMContentLoaded', mainInit);
+        
+        // Listener para fechar o modal clicando fora
+        window.addEventListener('click', (event) => {
+            const modal = document.getElementById('video-modal');
+            if (event.target === modal) {
+                window.closeModal();
+            }
+        });
+        
+        // Listener para fechar o tooltip ao rolar a página
+        window.addEventListener('scroll', window.hideTooltip);
+    </script>
+
+    <!-- Importa uma fonte moderna e limpa do Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* -------------------------------------------------------------------
+         * RESET E CONFIGURAÇÕES GLOBAIS
+         * ------------------------------------------------------------------- */
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            transition: all 0.3s ease-in-out;
+        }
+
+        /* Variáveis de Cores - Estilo FLUI */
+        :root {
+            --color-dark: #000000;      
+            --color-gold: #FFD700;      
+            --color-text: #F0F8FF;      
+            --color-light-bg: #111111;  
+            --color-accent-blue: #0947D7; /* NOVO AZUL SOLICITADO */
+            --color-tooltip-bg: #222222; 
+        }
+
+        /* -------------------------------------------------------------------
+         * CORPO E LAYOUT PRINCIPAL (GRID com Sidebar)
+         * ------------------------------------------------------------------- */
+
+        body {
+            background-color: var(--color-dark);
+            color: var(--color-text);
+            font-family: 'Roboto', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Container principal para o layout de duas colunas (Sidebar + Main Content) */
+        #content-wrapper {
+            display: grid;
+            grid-template-columns: 200px 1fr; /* Sidebar fixa + Conteúdo principal */
+            flex-grow: 1;
+        }
+        
+        @media (max-width: 768px) {
+            #content-wrapper {
+                grid-template-columns: 1fr; /* Coluna única em telas pequenas */
+                flex-direction: column;
+            }
+        }
+
+        /* -------------------------------------------------------------------
+         * BARRA LATERAL (ASIDE) - FIXA
+         * ------------------------------------------------------------------- */
+        #sidebar {
+            background-color: #080808; 
+            padding: 20px 10px 20px 5%;
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            
+            /* PROPRIEDADES STICKY */
+            position: sticky; 
+            top: 80px; 
+            max-height: calc(100vh - 80px); 
+            overflow-y: auto; 
+        }
+        
+        #sidebar button {
+            background-color: transparent;
+            color: rgba(255, 255, 255, 0.7);
+            border: 1px solid transparent;
+            padding: 10px 15px;
+            text-align: left;
+            border-radius: 6px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            /* Adicionado para ajustar o texto e a contagem na mesma linha */
+            display: flex; 
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #sidebar button:hover {
+            color: var(--color-gold);
+            background-color: #1A1A1A;
+        }
+
+        #sidebar button.active {
+            color: var(--color-gold);
+            border-color: var(--color-gold);
+            background-color: #1A1A1A;
+            font-weight: 700;
+        }
+        
+        @media (max-width: 768px) {
+            #sidebar {
+                position: relative; 
+                top: 0; 
+                max-height: none;
+                display: grid;
+                grid-template-columns: repeat(3, 1fr); 
+                gap: 10px;
+                padding: 15px 5%; 
+                min-height: auto;
+                border-right: none;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                overflow-y: visible;
+            }
+            #sidebar button {
+                text-align: center;
+                padding: 8px;
+                justify-content: center; /* Centraliza o texto e a contagem em mobile */
+            }
+        }
+        
+        /* -------------------------------------------------------------------
+         * CABEÇALHO (HEADER) - MINIMALISTA
+         * ------------------------------------------------------------------- */
+
+        header {
+            background-color: var(--color-dark); 
+            padding: 20px 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap; 
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            position: sticky; 
+            top: 0;
+            z-index: 10;
+        }
+
+        header h1 {
+            color: var(--color-text); 
+            font-size: clamp(1.5rem, 5vw, 1.8rem); 
+            font-weight: 900;
+            letter-spacing: 1px;
+            min-width: 150px;
+            cursor: pointer; 
+        }
+
+        #search-bar {
+            display: flex;
+            gap: 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px; 
+            overflow: hidden;
+            flex-grow: 1;
+            max-width: 500px; 
+        }
+
+        #search-bar input[type="text"] {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 20px 0 0 20px; 
+            background-color: var(--color-light-bg);
+            color: var(--color-text);
+            font-size: 1rem;
+            outline: none;
+            flex-grow: 1;
+        }
+
+        #search-bar button {
+            padding: 8px 18px;
+            background-color: var(--color-accent-blue);
+            color: var(--color-text);
+            border: none;
+            border-radius: 0 20px 20px 0; 
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        
+        #search-bar button:hover {
+            background-color: #073599; /* Tom mais escuro do novo azul */
+        }
+
+        #user-id-display {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.4); 
+            margin-top: 5px;
+            min-width: 150px;
+            text-align: right;
+        }
+
+        /* -------------------------------------------------------------------
+         * CONTEÚDO PRINCIPAL (MAIN)
+         * ------------------------------------------------------------------- */
+
+        main {
+            flex-grow: 1;
+            padding: 40px 5% 40px 5%; 
+            text-align: center;
+            min-width: 0; 
+        }
+
+        .main-content-area {
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .main-title {
+            color: var(--color-text); 
+            font-size: clamp(2.5rem, 8vw, 4rem); 
+            margin-bottom: 10px;
+            font-weight: 900;
+        }
+
+        .main-title .highlight {
+            color: var(--color-gold); 
+        }
+
+        .main-subtitle {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: clamp(1rem, 4vw, 1.2rem);
+            line-height: 1.6;
+            max-width: 600px;
+            margin: 0 auto 40px auto;
+        }
+
+        /* -------------------------------------------------------------------
+         * SEÇÃO PRINCIPAIS / DESTAQUES (FEATURED)
+         * ------------------------------------------------------------------- */
+        #featured-section {
+            margin-top: 20px; 
+            margin-bottom: 50px;
+            padding: 30px 0;
+            border-top: 1px solid rgba(255, 215, 0, 0.1); 
+            border-bottom: 1px solid rgba(255, 215, 0, 0.1); 
+        }
+
+        #featured-section h3 {
+            font-size: 1.8rem;
+            color: var(--color-gold);
+            margin-bottom: 25px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        #featured-items-container {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            flex-wrap: wrap; 
+        }
+
+        .featured-card {
+            background-color: #1A1A1A;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            align-items: center;
+            width: 100%;
+            max-width: 300px; 
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+            transition: background-color 0.2s, transform 0.2s; /* Adicionado transform para hover */
+            cursor: pointer; 
+        }
+
+        .featured-card:hover {
+            background-color: #222;
+            transform: scale(1.03); /* Aumenta ligeiramente no hover */
+        }
+        
+        .featured-card:not(:hover) {
+            transform: scale(1.0); /* Volta ao normal quando o hover é removido */
+        }
+
+        .featured-initials {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: var(--color-accent-blue);
+            color: var(--color-text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.1rem;
+            font-weight: 900;
+            margin-right: 15px;
+            flex-shrink: 0;
+            box-shadow: 0 0 0 3px #1A1A1A, 0 0 0 4px var(--color-accent-blue);
+        }
+
+        .featured-info {
+            text-align: left;
+            overflow: hidden; 
+        }
+
+        .featured-info h4 {
+            font-size: 1.1rem;
+            color: var(--color-text);
+            margin: 0;
+            white-space: nowrap; 
+            overflow: hidden;
+            text-overflow: ellipsis; 
+        }
+
+        .featured-category {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        @media (max-width: 768px) {
+            #featured-items-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            .featured-card {
+                max-width: 90%;
+            }
+        }
+        
+        /* -------------------------------------------------------------------
+         * TOOLTIP DE DESTAQUE (POPUP de descrição ao passar o mouse)
+         * ------------------------------------------------------------------- */
+        #feature-tooltip-popup {
+            position: absolute; 
+            background-color: var(--color-tooltip-bg);
+            border: 1px solid var(--color-gold);
+            border-radius: 8px;
+            padding: 15px;
+            max-width: 300px; 
+            z-index: 50; 
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.7);
+            
+            /* Propriedades de Transição e Estado Inicial */
+            display: none;
+            opacity: 0;
+            transform: translateY(10px); 
+            transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+            text-align: left;
+        }
+        
+        #feature-tooltip-popup .tooltip-title {
+            color: var(--color-gold);
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        
+        #feature-tooltip-popup p {
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.9);
+            margin: 0;
+            line-height: 1.4;
+        }
+        
+        @media (max-width: 600px) {
+            #feature-tooltip-popup {
+                /* Em telas pequenas, ocupa quase a largura total e fica fixo no topo */
+                width: 90%; 
+                left: 5% !important; 
+                right: 5% !important;
+                top: 90px !important; 
+                max-width: none;
+                position: fixed; 
+                transform: translateY(-20px);
+            }
+            #feature-tooltip-popup[style*="opacity: 1"] {
+                 transform: translateY(0);
+            }
+        }
+
+
+        /* -------------------------------------------------------------------
+         * GRID DE SINGULARIDADES (Onde os cards vão)
+         * ------------------------------------------------------------------- */
+
+        #singularities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            justify-items: center;
+            margin-top: 30px;
+        }
+
+        /* CARD INDIVIDUAL (Estilo existente, mantido) */
+        .singularidade-card {
+            background-color: var(--color-light-bg);
+            border: 1px solid #1A1A1A; 
+            border-radius: 8px;
+            padding: 20px;
+            text-align: left;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            cursor: pointer;
+            width: 100%;
+            max-width: 350px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center; 
+            transition: transform 0.3s ease, background-color 0.3s ease;
+        }
+
+        .singularidade-card:hover {
+            transform: translateY(-3px); 
+            border-color: rgba(255, 255, 255, 0.05);
+            background-color: #1A1A1A;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.1); 
+        }
+
+        /* PLACEHOLDER em HTML DIRETO */
+        .css-placeholder-container {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background-color: var(--color-gold); 
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-shrink: 0;
+            overflow: hidden;
+            font-size: 2.2rem; 
+            font-weight: 900;
+            color: var(--color-dark); 
+            letter-spacing: 1px;
+            box-shadow: 0 0 0 4px var(--color-dark), 0 0 0 5px var(--color-gold); 
+        }
+
+        .singularidade-card h2 {
+            color: var(--color-gold);
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .singularidade-card p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.95rem;
+            line-height: 1.5;
+            flex-grow: 1; 
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        /* Estilos para os links (Wikipédia e YouTube) */
+        .links-container {
+            display: flex;
+            justify-content: center;
+            gap: 10px; /* Espaçamento entre os links */
+            margin-top: 15px;
+            width: 100%;
+        }
+        
+        /* Botões Arredondados (PILL SHAPE) */
+        .wiki-link, .youtube-link {
+            color: var(--color-text);
+            text-decoration: none;
+            font-weight: 500;
+            display: inline-block;
+            padding: 8px 15px; 
+            border: none;
+            border-radius: 9999px; 
+            flex-grow: 1;
+            text-align: center;
+            max-width: 750px;
+            cursor: pointer; 
+            transition: background-color 0.2s ease, transform 0.2s ease;
+            font-size: 0.9rem;
+        }
+
+        .wiki-link {
+            background-color: var(--color-accent-blue);
+        }
+
+        .wiki-link:hover {
+            background-color: #073599; /* Tom mais escuro do novo azul */
+            color: var(--color-text);
+            transform: scale(1.03);
+        }
+        
+        /* Ajuste do transform de volta ao normal (do 1.03 para 1.0) */
+        .wiki-link:not(:hover) {
+            transform: scale(1.0);
+        }
+        
+        .youtube-link {
+            background-color: #FF0000; /* Cor do YouTube */
+        }
+        
+        .youtube-link:hover {
+            background-color: #CC0000;
+            transform: scale(1.03);
+        }
+
+        .youtube-link:not(:hover) {
+            transform: scale(1.0);
+        }
+
+        /* -------------------------------------------------------------------
+         * MODAL (POPUP) PARA YOUTUBE
+         * ------------------------------------------------------------------- */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 100; 
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0, 0, 0, 0.9); 
+            backdrop-filter: blur(5px);
+            padding-top: 50px;
+        }
+
+        .modal-content {
+            background-color: var(--color-dark);
+            margin: 5% auto; 
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            width: 90%; 
+            max-width: 800px; 
+            position: relative;
+            box-shadow: 0 5px 15px rgba(255, 215, 0, 0.2); 
+        }
+        
+        @media (max-width: 600px) {
+            .modal-content {
+                margin: 20px auto;
+                width: 95%;
+            }
+        }
+
+        .close-button {
+            color: var(--color-gold);
+            float: right;
+            font-size: 36px;
+            font-weight: bold;
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            cursor: pointer;
+            z-index: 101; 
+            line-height: 1; 
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: #fff;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .video-wrapper {
+            position: relative;
+            padding-bottom: 56.25%; 
+            height: 0;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .video-wrapper iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+        }
+
+        /* -------------------------------------------------------------------
+         * RODAPÉ (FOOTER)
+         * ------------------------------------------------------------------- */
+
+        footer {
+            background-color: var(--color-dark); 
+            padding: 15px 5%;
+            text-align: center;
+            border-top: 1px solid rgba(255, 255, 255, 0.1); 
+            flex-shrink: 0; 
+        }
+
+        footer ul {
+            list-style: none;
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+        }
+
+        footer a {
+            color: rgba(255, 255, 255, 0.5); 
+            text-decoration: none;
+            font-weight: 400;
+            padding: 5px;
+        }
+
+        footer a:visited {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        footer a:hover {
+            color: var(--color-gold); 
+            text-decoration: none;
+            letter-spacing: 0.5px; 
+        }
+
+        /* -------------------------------------------------------------------
+         * RESPONSIVIDADE
+         * ------------------------------------------------------------------- */
+
+        @media (max-width: 768px) {
+            header {
+                flex-direction: column;
+                gap: 15px;
+                padding: 15px 5%;
+            }
+
+            #search-bar {
+                width: 100%;
+                max-width: 100%;
+            }
+
+            header h1 {
+                text-align: center;
+            }
+
+            #user-id-display {
+                text-align: center;
+                width: 100%;
+            }
+            
+            .links-container {
+                flex-direction: column; 
+                gap: 5px;
+            }
+            
+            .wiki-link, .youtube-link {
+                max-width: 100%; 
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <!-- TÍTULO ATUALIZADO: de FLUI.SINGULAR para SINGULARIDADES -->
+        <h1 onclick="resetFilter()">SINGULARIDADES</h1>
+        <div id="search-bar"> 
+            <input type="text" id="search-input" placeholder="Buscar Singularidades..." onkeyup="updateView()">
+            <button onclick="updateView()">Buscar</button>
+        </div>
+        <div id="user-id-display">ID: Carregando...</div>
+    </header>
+
+    <!-- NOVO CONTAINER DE CONTEÚDO PARA O LAYOUT DE BARRA LATERAL -->
+    <div id="content-wrapper">
+        
+        <!-- BARRA LATERAL DE FILTROS -->
+        <aside id="sidebar">
+            <h3 style="color: var(--color-gold); font-size: 1.1rem; margin-bottom: 5px;">Categorias</h3>
+            <!-- Os botões são gerados dinamicamente pelo JavaScript na função mainInit -->
+        </aside>
+
+        <!-- CONTEÚDO PRINCIPAL E CARDS -->
+        <main>
+            <div class="main-content-area">
+                <h2 class="main-title">Descubra Mentes e Fenômenos <span class="highlight">Singulares</span></h2>
+                <!-- SUBTÍTULO ATUALIZADO: Inclusão da referência ao canal -->
+                <p class="main-subtitle">Uma enciclopédia interativa, do canal Singularidadesbr, focada em personalidades, eventos e conceitos que mudaram o curso da história e da ciência. Explore o extraordinário.</p>
+            </div>
+            
+            <!-- SEÇÃO: PRINCIPAIS / DESTAQUES -->
+            <section id="featured-section" class="main-content-area">
+                <h3>Principais Singularidades</h3>
+                <div id="featured-items-container">
+                    <!-- Cards de destaques serão injetados aqui, com eventos onmouseover/onmouseout -->
+                </div>
+            </section>
+            
+            <section id="singularities-grid">
+                <p style="text-align: center; color: rgba(255, 255, 255, 0.5); width: 100%;">Carregando Singularidades...</p>
+            </section>
+        </main>
+    </div>
+
+    <footer>
+        <ul>
+            <li>
+                <a href="https://www.youtube.com/@Singularidadesbr" target="_blank">Canal Singularidadesbr</a>
+            </li>
+            <li>
+                <a href="https://www.instagram.com/vz_pahh/" target="_blank">Instagram ph</a>
+            </li>
+        </ul>
+    </footer>
+    
+    <!-- MODAL POPUP PARA VÍDEOS DO YOUTUBE -->
+    <div id="video-modal" class="modal">
+        <!-- O evento onclick no span e no listener de fora do modal fecham e param o vídeo -->
+        <div class="modal-content">
+            <span class="close-button" onclick="closeModal()">&times;</span>
+            <div class="video-wrapper">
+                <!-- O iFrame será injetado/atualizado pelo JS -->
+                <iframe id="youtube-iframe" width="100%" height="100%" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+            </div>
+        </div>
+    </div>
+    
+    <!-- NOVO ELEMENTO: TOOLTIP REUTILIZÁVEL PARA DESTAQUES -->
+    <div id="feature-tooltip-popup">
+        <!-- Conteúdo injetado pelo JavaScript (título e descrição) -->
+    </div>
+
+</body>
+</html>
