@@ -545,7 +545,7 @@
             --color-gold: #FF4900;      /* Cor laranga trocada para um tom mais quente */
             --color-text: #F0F8FF;      
             --color-light-bg: #111111;  
-            --color-accent-blue: #0947D7; /* NOVO AZUL SOLICITADO */
+            --color-accent-blue: #5f6063; /* NOVO AZUL SOLICITADO */
             --color-tooltip-bg: #222222; 
         }
 
@@ -619,7 +619,7 @@
             color: var(--color-gold);
             border-color: var(--color-gold);
             background-color: #1A1A1A;
-            font-weight: 700;
+            font-weight: 1000;
         }
         
         @media (max-width: 768px) {
@@ -794,9 +794,9 @@
          * ------------------------------------------------------------------- */
         #featured-section {
             margin-top: 20px; 
-            margin-bottom: 50px;
+            margin-bottom: 100px;
             padding: 30px 0;
-            border-top: 1px solid rgba(255, 215, 0, 0.1); 
+            border-top: 1px solid rgba(267, 215, 0, 0.1); 
             border-bottom: 1px solid rgba(255, 215, 0, 0.1); 
         }
 
@@ -818,7 +818,7 @@
         .featured-card {
             background-color: #1A1A1A;
             border: 1px solid #333;
-            border-radius: 8px;
+            border-radius: 100px;
             padding: 15px;
             display: flex;
             align-items: center;
@@ -848,7 +848,7 @@
             justify-content: center;
             align-items: center;
             font-size: 1.1rem;
-            font-weight: 900;
+            font-weight: 800;
             margin-right: 15px;
             flex-shrink: 0;
             box-shadow: 0 0 0 3px #1A1A1A, 0 0 0 4px var(--color-accent-blue);
@@ -1027,9 +1027,9 @@
             border-radius: 9999px; 
             flex-grow: 1;
             text-align: center;
-            max-width: 150px;
+            max-width: 250px;
             cursor: pointer; 
-            transition: background-color 0.2s ease, transform 0.2s ease;
+            transition: background-color 0.3s ease, transform 0.3s ease;
             font-size: 0.9rem;
         }
 
@@ -1040,7 +1040,7 @@
         .wiki-link:hover {
             background-color: #073599; /* Tom mais escuro do novo azul */
             color: var(--color-text);
-            transform: scale(1.03);
+            transform: scale(1.12);
         }
         
         /* Ajuste do transform de volta ao normal (do 1.03 para 1.0) */
@@ -1054,7 +1054,7 @@
         
         .youtube-link:hover {
             background-color: #CC0000;
-            transform: scale(1.03);
+            transform: scale(1.1);
         }
 
         .youtube-link:not(:hover) {
