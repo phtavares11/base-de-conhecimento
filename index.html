@@ -117,13 +117,14 @@
         
         // Função para calcular a contagem de itens por categoria
         const calculateCategoryCounts = (data) => {
-            const counts = data.reduce((acc, item) => {
+            const counts = data.reduce((acc, item) => { 
                 const category = item.category || 'Outros';
                 acc[category] = (acc[category] || 0) + 1;
                 return acc;
-            }, {});
+            }, {}); // O acumulador (acc) é iniciado como um objeto vazio ({})
             counts['Todos'] = data.length;
-            return counts;
+            // CORREÇÃO: Retornar a variável 'counts' em vez de 'acc'
+            return counts; 
         };
 
         // Função para atualizar visualmente os botões da barra lateral
@@ -541,7 +542,7 @@
         /* Variáveis de Cores - Estilo FLUI */
         :root {
             --color-dark: #000000;      
-            --color-gold: #FFD700;      
+            --color-gold: #FF4900;      /* Cor laranga trocada para um tom mais quente */
             --color-text: #F0F8FF;      
             --color-light-bg: #111111;  
             --color-accent-blue: #0947D7; /* NOVO AZUL SOLICITADO */
@@ -746,7 +747,46 @@
             font-size: clamp(1rem, 4vw, 1.2rem);
             line-height: 1.6;
             max-width: 600px;
-            margin: 0 auto 40px auto;
+            margin: 0 auto 30px auto; /* Reduzido o margin-bottom para dar espaço ao novo botão */
+        }
+        
+        /* -------------------------------------------------------------------
+         * NOVO BOTÃO PRINCIPAL (Canal YouTube)
+         * ------------------------------------------------------------------- */
+        .button-container {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 40px; /* Espaço antes da seção de destaques */
+        }
+
+        .main-youtube-button {
+            background-color: var(--color-accent-blue);
+            color: var(--color-text);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 1.1rem; 
+            display: inline-block;
+            padding: 12px 25px; 
+            border-radius: 9999px; 
+            box-shadow: 0 4px 10px rgba(9, 71, 215, 0.4); 
+            transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .main-youtube-button:hover {
+            background-color: #073599; 
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(9, 71, 215, 0.6);
+        }
+        
+        .main-youtube-button:not(:hover) {
+            transform: scale(1.0);
+        }
+
+        @media (max-width: 768px) {
+            .main-youtube-button {
+                width: 90%;
+                max-width: 350px;
+            }
         }
 
         /* -------------------------------------------------------------------
@@ -987,7 +1027,7 @@
             border-radius: 9999px; 
             flex-grow: 1;
             text-align: center;
-            max-width: 750px;
+            max-width: 150px;
             cursor: pointer; 
             transition: background-color 0.2s ease, transform 0.2s ease;
             font-size: 0.9rem;
@@ -1192,6 +1232,13 @@
                 <h2 class="main-title">Descubra Mentes e Fenômenos <span class="highlight">Singulares</span></h2>
                 <!-- SUBTÍTULO ATUALIZADO: Inclusão da referência ao canal -->
                 <p class="main-subtitle">Uma enciclopédia interativa, do canal Singularidadesbr, focada em personalidades, eventos e conceitos que mudaram o curso da história e da ciência. Explore o extraordinário.</p>
+                
+                <!-- NOVO BOTÃO SOLICITADO AQUI -->
+                <div class="button-container">
+                    <a href="https://www.youtube.com/@Singularidadesbr" target="_blank" class="main-youtube-button">
+                        Acessar Canal Singularidades
+                    </a>
+                </div>
             </div>
             
             <!-- SEÇÃO: PRINCIPAIS / DESTAQUES -->
@@ -1211,7 +1258,7 @@
     <footer>
         <ul>
             <li>
-                <a href="https://www.youtube.com/@Singularidadesbr" target="_blank">Canal Singularidadesbr</a>
+                <a href="https://www.youtube.com/@Singularidadesbr" target="_blank">Canal Singularidades</a>
             </li>
             <li>
                 <a href="https://www.instagram.com/vz_pahh/" target="_blank">Instagram ph</a>
