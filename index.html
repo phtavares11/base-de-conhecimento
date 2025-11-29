@@ -441,6 +441,19 @@
                 });
             }
         };
+        
+        // NOVO: Função para aplicar transparência ao cabeçalho quando a tela é rolada
+        const handleScrollTransparency = () => {
+            const header = document.querySelector('header');
+            if (!header) return;
+
+            // Define o ponto de rolagem para ativar a transparência (ex: 5 pixels)
+            if (window.scrollY > 5) {
+                header.classList.add('scrolled');
+            } else {
+                header.classList.remove('scrolled');
+            }
+        };
 
         // Função principal de inicialização
         const mainInit = async () => {
@@ -510,7 +523,11 @@
         };
 
         // Roda a função principal quando o DOM estiver pronto
-        document.addEventListener('DOMContentLoaded', mainInit);
+        document.addEventListener('DOMContentLoaded', () => {
+             mainInit();
+             // Adiciona o listener de rolagem para a transparência do cabeçalho
+             window.addEventListener('scroll', handleScrollTransparency);
+        });
         
         // Listener para fechar o modal clicando fora
         window.addEventListener('click', (event) => {
@@ -526,6 +543,9 @@
 
     <!-- Importa uma fonte moderna e limpa do Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700;900&display=swap" rel="stylesheet">
+    
+    <!-- Importa Font Awesome para os ícones -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
         /* -------------------------------------------------------------------
@@ -648,17 +668,26 @@
          * ------------------------------------------------------------------- */
 
         header {
-            background-color: var(--color-dark); 
+            background-color: var(--color-dark); /* Fundo opaco por padrão */
             padding: 20px 5%;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 20px;
+            justify-content: center;
+            align-items: left;
+            gap: 300px;
             flex-wrap: wrap; 
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             position: sticky; 
             top: 0;
             z-index: 10;
+            /* Garante que a transição de cor de fundo seja suave */
+            transition: background-color 0.4s ease, border-bottom 0.4s ease, backdrop-filter 0.4s ease;
+        }
+
+        /* Nova classe para transparência (80%) e blur ao rolar - EFEITO GLASSMORPHISM */
+        header.scrolled {
+            background-color: rgba(0, 0, 0, 0.8); /* 80% de opacidade para o fundo preto */
+            backdrop-filter: blur(5px); /* Desfoque do fundo */
+            border-bottom: 1px solid var(--color-gold); /* Borda de destaque quando rolado */
         }
 
         header h1 {
@@ -672,7 +701,7 @@
 
         #search-bar {
             display: flex;
-            gap: 0;
+            gap: 10;
             border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 20px; 
             overflow: hidden;
@@ -681,7 +710,7 @@
         }
 
         #search-bar input[type="text"] {
-            padding: 8px 15px;
+            padding: 8px 18px;
             border: none;
             border-radius: 20px 0 0 20px; 
             background-color: var(--color-light-bg);
@@ -1181,6 +1210,11 @@
                 padding: 15px 5%;
             }
 
+            header.scrolled {
+                /* Garante que o fundo semitransparente funcione em mobile também */
+                background-color: rgba(0, 0, 0, 0.8);
+            }
+
             #search-bar {
                 width: 100%;
                 max-width: 100%;
@@ -1209,7 +1243,7 @@
 <body>
     <header>
         <!-- TÍTULO ATUALIZADO: de FLUI.SINGULAR para SINGULARIDADES -->
-        <h1 onclick="resetFilter()">SINGULARIDADES</h1>
+        <h1 onclick="resetFilter()"><i class="fa-solid fa-meteor"></i></h1>
         <div id="search-bar"> 
             <input type="text" id="search-input" placeholder="Buscar Singularidades..." onkeyup="updateView()">
             <button onclick="updateView()">Buscar</button>
